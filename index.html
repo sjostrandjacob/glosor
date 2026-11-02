@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Melkers Glos-Coach</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .card-flip { transition: transform 0.3s ease; }
+    .card-flip:active { transform: scale(0.98); }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-16">
+
+  <div class="max-w-md mx-auto p-4">
+    <!-- TOPP / HEADER -->
+    <header class="flex justify-between items-center py-3 border-b border-slate-800 mb-5">
+      <div class="flex items-center gap-3">
+        <span class="text-3xl">🚀</span>
+        <div>
+          <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">Melkers Glos-Coach</h1>
+          <p class="text-xs text-slate-400">Fota läxan & sätt alla rätt</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
+          🔥 <span id="streakCount">0</span>
+        </div>
+        <button onclick="toggleSettings()" class="text-slate-400 hover:text-white p-2 rounded-lg bg-slate-800">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- INSTÄLLNINGAR (API-NYCKEL) -->
+    <div id="settingsModal" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-4 mb-5 shadow-xl">
+      <h2 class="font-bold text-sm mb-1 text-indigo-400"><i class="fa-solid fa-key mr-1"></i> Google Gemini API-nyckel</h2>
+      <p class="text-xs text-slate-400 mb-3">Nyckeln sparas bara lokalt i den här telefonen/webbläsaren för att kunna läsa av foton på läxan.</p>
+      <input type="password" id="apiKeyInput" placeholder="Klistra in AI Studio-nyckel här..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm mb-3 text-white focus:outline-none focus:border-indigo-500">
+      <div class="flex justify-end gap-2">
+        <button onclick="toggleSettings()" class="px-3 py-1.5 text-xs text-slate-400">Stäng</button>
+        <button onclick="saveApiKey()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold">Spara nyckel</button>
+      </div>
+    </div>
+
+    <!-- SPRÅKVAL & KAMERA -->
+    <div class="bg-slate-800/70 border border-slate-700/80 rounded-2xl p-4 mb-5">
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button id="langEs" onclick="setLanguage('es-ES')" class="py-2.5 rounded-xl font-bold text-sm border-2 border-indigo-500 bg-indigo-500/20 text-white flex items-center justify-center gap-2">
+          🇪🇸 Spanska
+        </button>
+        <button id="langEn" onclick="setLanguage('en-GB')" class="py-2.5 rounded-xl font-bold text-sm border-2 border-slate-700 bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
+          🇬🇧 Engelska
+        </button>
+      </div>
+
+      <label for="cameraInput" class="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-lg transition active:scale-95">
+        <i class="fa-solid fa-camera text-lg"></i>
+        <span>Fota ny gloslista</span>
+      </label>
+      <input type="file" id="cameraInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+      
+      <div id="loadingIndicator" class="hidden mt-3 text-center py-3 bg-slate-900/60 rounded-xl">
+        <i class="fa-solid fa-circle-notch fa-spin text-indigo-400 text-xl mb-1"></i>
+        <p class="text-xs text-slate-300">AI:n läser in dina glosor...</p>
+      </div>
+    </div>
+
+    <!-- SPELLÄGEN (FLIKAR) -->
+    <div class="grid grid-cols-4 gap-1.5 bg-slate-800 p-1.5 rounded-2xl mb-5">
+      <button onclick="switchMode('flashcards')" id="tab-flashcards" class="py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white">
+        <i class="fa-solid fa-clone block mb-1 text-sm"></i>Kort
+      </button>
+      <button onclick="switchMode('spell')" id="tab-spell" class="py-2 rounded-xl text-xs font-bold text-slate-400">
+        <i class="fa-solid fa-keyboard block mb-1 text-sm"></i>Stava
+      </button>
+      <button onclick="switchMode('speak')" id="tab-speak" class="py-2 rounded-xl text-xs font-bold text-slate-400">
+        <i class="fa-solid fa-microphone block mb-1 text-sm"></i>Uttal
+      </button>
+      <button onclick="switchMode('list')" id="tab-list" class="py-2 rounded-xl text-xs font-bold text-slate-400">
+        <i class="fa-solid fa-list block mb-1 text-sm"></i>Lista (<span id="wordCount">0</span>)
+      </button>
+    </div>
+
+    <!-- LÄGE 1: FLASHCARDS -->
+    <div id="mode-flashcards" class="space-y-4">
+      <div onclick="flipCard()" class="card-flip bg-slate-800 border-2 border-slate-700 rounded-3xl p-8 min-h-[230px] flex flex-col items-center justify-center text-center cursor-pointer relative shadow-xl">
+        <span id="cardProgress" class="absolute top-4 left-4 text-xs text-slate-500 font-bold">1 / 5</span>
+        <span id="cardLangTag" class="text-xs uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 mb-3">Svenska</span>
+        <h2 id="cardMainText" class="text-3xl font-extrabold mb-3">Hund</h2>
+        <p id="cardExample" class="text-sm text-slate-400 italic hidden"></p>
+        <p class="text-xs text-slate-500 absolute bottom-4"><i class="fa-solid fa-rotate mr-1"></i> Tryck på kortet för att vända</p>
+      </div>
+
+      <div class="flex justify-between items-center gap-3">
+        <button onclick="prevWord()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-2xl w-16 text-slate-300 active:scale-95">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <button onclick="speakCurrentWord()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 py-4 rounded-2xl font-bold text-indigo-400 flex items-center justify-center gap-2 active:scale-95">
+          <i class="fa-solid fa-volume-high text-lg"></i> Lyssna uttal
+        </button>
+        <button onclick="nextWord()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-2xl w-16 text-slate-300 active:scale-95">
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- LÄGE 2: STAVNING -->
+    <div id="mode-spell" class="hidden space-y-4">
+      <div class="bg-slate-800 border-2 border-slate-700 rounded-3xl p-6 text-center">
+        <span class="text-xs text-slate-400 uppercase">Skriv ordet på målspråket</span>
+        <h2 id="spellPrompt" class="text-2xl font-extrabold my-3 text-white">Hund</h2>
+        
+        <input type="text" id="spellInput" placeholder="Skriv ditt svar här..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
+          class="w-full bg-slate-900 border-2 border-slate-700 rounded-xl px-4 py-3 text-center text-lg font-bold text-white focus:outline-none focus:border-indigo-500 mb-3">
+        
+        <!-- Snabbknappar för spanska specialtecken -->
+        <div id="spanishChars" class="flex justify-center gap-1.5 mb-4 flex-wrap">
+          <button onclick="insertChar('á')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">á</button>
+          <button onclick="insertChar('é')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">é</button>
+          <button onclick="insertChar('í')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">í</button>
+          <button onclick="insertChar('ó')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">ó</button>
+          <button onclick="insertChar('ú')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">ú</button>
+          <button onclick="insertChar('ñ')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">ñ</button>
+          <button onclick="insertChar('¿')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">¿</button>
+          <button onclick="insertChar('¡')" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold">¡</button>
+        </div>
+
+        <div id="spellFeedback" class="hidden p-3 rounded-xl text-sm font-bold mb-3"></div>
+
+        <div class="flex gap-2">
+          <button onclick="checkSpelling()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl active:scale-95">
+            Rätta svar
+          </button>
+          <button onclick="nextWord()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-3 rounded-xl font-bold text-sm">
+            Nästa <i class="fa-solid fa-forward ml-1"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LÄGE 3: UTTAL -->
+    <div id="mode-speak" class="hidden space-y-4">
+      <div class="bg-slate-800 border-2 border-slate-700 rounded-3xl p-6 text-center">
+        <span class="text-xs text-slate-400 uppercase">Uttala ordet högt</span>
+        <p id="speakSwedish" class="text-sm text-slate-400 mt-1">Hund</p>
+        <h2 id="speakTarget" class="text-3xl font-extrabold my-3 text-indigo-400">el perro</h2>
+        
+        <button onclick="speakCurrentWord()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-full mb-6 inline-flex items-center gap-1">
+          <i class="fa-solid fa-volume-high"></i> Lyssna hur det låter först
+        </button>
+
+        <div class="my-2">
+          <button id="micButton" onclick="startSpeechRecognition()" class="w-20 h-20 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center mx-auto transition active:scale-90">
+            <i class="fa-solid fa-microphone"></i>
+          </button>
+          <p id="micStatus" class="text-xs text-slate-400 mt-3">Tryck på mikrofonen och säg ordet</p>
+        </div>
+
+        <div id="speakFeedback" class="hidden p-3 rounded-xl text-sm font-bold mt-4"></div>
+
+        <button onclick="nextWord()" class="mt-4 w-full bg-slate-700 hover:bg-slate-600 text-slate-200 py-2.5 rounded-xl font-bold text-sm">
+          Nästa ord <i class="fa-solid fa-arrow-right ml-1"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- LÄGE 4: GLOSLISTA -->
+    <div id="mode-list" class="hidden space-y-3">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-bold text-sm text-slate-300">Aktuella glosor</h3>
+          <button onclick="resetDemoWords()" class="text-xs text-slate-400 hover:text-white underline">Återställ demo-ord</button>
+        </div>
+        <div id="wordListContainer" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- STARTDATA & TILLSTÅND ---
+    const demoWordsEs = [
+      { sv: "Hund", target: "el perro", example: "El perro corre rápido." },
+      { sv: "Spela fotboll", target: "jugar al fútbol", example: "Me gusta jugar al fútbol." },
+      { sv: "Hus", target: "la casa", example: "Mi casa es grande." },
+      { sv: "Skola", target: "la escuela", example: "Voy a la escuela." },
+      { sv: "Tack så mycket", target: "muchas gracias", example: "¡Muchas gracias por todo!" }
+    ];
+
+    let words = JSON.parse(localStorage.getItem('melker_words')) || demoWordsEs;
+    let currentLang = localStorage.getItem('melker_lang') || 'es-ES';
+    let currentIndex = 0;
+    let isFlipped = false;
+    let streak = 0;
+    let currentMode = 'flashcards';
+
+    // --- INITIERING ---
+    window.onload = () => {
+      const savedKey = localStorage.getItem('melker_gemini_key');
+      if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+      setLanguage(currentLang, false);
+      updateUI();
+      
+      document.getElementById('spellInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') checkSpelling();
+      });
+    };
+
+    function toggleSettings() {
+      document.getElementById('settingsModal').classList.toggle('hidden');
+    }
+
+    function saveApiKey() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      if (!key) return alert("Klistra in en giltig nyckel först!");
+      localStorage.setItem('melker_gemini_key', key);
+      toggleSettings();
+      alert("API-nyckeln är sparad! Nu kan ni fota läxan.");
+    }
+
+    function setLanguage(lang, save = true) {
+      currentLang = lang;
+      if (save) localStorage.setItem('melker_lang', lang);
+      
+      const btnEs = document.getElementById('langEs');
+      const btnEn = document.getElementById('langEn');
+      const spChars = document.getElementById('spanishChars');
+
+      if (lang === 'es-ES') {
+        btnEs.className = "py-2.5 rounded-xl font-bold text-sm border-2 border-indigo-500 bg-indigo-500/20 text-white flex items-center justify-center gap-2";
+        btnEn.className = "py-2.5 rounded-xl font-bold text-sm border-2 border-slate-700 bg-slate-800 text-slate-400 flex items-center justify-center gap-2";
+        spChars.classList.remove('hidden');
+      } else {
+        btnEn.className = "py-2.5 rounded-xl font-bold text-sm border-2 border-indigo-500 bg-indigo-500/20 text-white flex items-center justify-center gap-2";
+        btnEs.className = "py-2.5 rounded-xl font-bold text-sm border-2 border-slate-700 bg-slate-800 text-slate-400 flex items-center justify-center gap-2";
+        spChars.classList.add('hidden');
+      }
+      updateUI();
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      ['flashcards', 'spell', 'speak', 'list'].forEach(m => {
+        document.getElementById(`mode-${m}`).classList.add('hidden');
+        document.getElementById(`tab-${m}`).className = "py-2 rounded-xl text-xs font-bold text-slate-400";
+      });
+      document.getElementById(`mode-${mode}`).classList.remove('hidden');
+      document.getElementById(`tab-${mode}`).className = "py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white";
+      updateUI();
+    }
+
+    function updateUI() {
+      document.getElementById('wordCount').innerText = words.length;
+      document.getElementById('streakCount').innerText = streak;
+
+      if (words.length === 0) return;
+      if (currentIndex >= words.length) currentIndex = 0;
+      const word = words[currentIndex];
+
+      // Flashcard UI
+      document.getElementById('cardProgress').innerText = `${currentIndex + 1} / ${words.length}`;
+      const langName = currentLang === 'es-ES' ? 'Spanska 🇪🇸' : 'Engelska 🇬🇧';
+      
+      if (!isFlipped) {
+        document.getElementById('cardLangTag').innerText = "Svenska 🇸🇪";
+        document.getElementById('cardLangTag').className = "text-xs uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 mb-3";
+        document.getElementById('cardMainText').innerText = word.sv;
+        document.getElementById('cardExample').classList.add('hidden');
+      } else {
+        document.getElementById('cardLangTag').innerText = langName;
+        document.getElementById('cardLangTag').className = "text-xs uppercase tracking-wider px-2.5 py-1 rounded-full bg-indigo-500/30 text-indigo-300 mb-3";
+        document.getElementById('cardMainText').innerText = word.target;
+        if (word.example) {
+          document.getElementById('cardExample').innerText = `"${word.example}"`;
+          document.getElementById('cardExample').classList.remove('hidden');
+        }
+      }
+
+      // Stavning UI
+      document.getElementById('spellPrompt').innerText = word.sv;
+      document.getElementById('spellInput').value = '';
+      document.getElementById('spellFeedback').classList.add('hidden');
+
+      // Uttal UI
+      document.getElementById('speakSwedish').innerText = word.sv;
+      document.getElementById('speakTarget').innerText = word.target;
+      document.getElementById('speakFeedback').classList.add('hidden');
+
+      // Lista UI
+      const listContainer = document.getElementById('wordListContainer');
+      listContainer.innerHTML = words.map((w, idx) => `
+        <div class="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-slate-800">
+          <div>
+            <p class="font-bold text-sm text-white">${w.target}</p>
+            <p class="text-xs text-slate-400">${w.sv}</p>
+          </div>
+          <button onclick="speakText('${w.target.replace(/'/g, "\\'")}')" class="text-indigo-400 p-2">
+            <i class="fa-solid fa-volume-high"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // --- KORT & NAVIGERING ---
+    function flipCard() {
+      isFlipped = !isFlipped;
+      updateUI();
+      if (isFlipped) speakCurrentWord();
+    }
+
+    function nextWord() {
+      currentIndex = (currentIndex + 1) % words.length;
+      isFlipped = false;
+      updateUI();
+    }
+
+    function prevWord() {
+      currentIndex = (currentIndex - 1 + words.length) % words.length;
+      isFlipped = false;
+      updateUI();
+    }
+
+    // --- TEXT-TILL-TAL (UPPLÄSNING) ---
+    function speakCurrentWord() {
+      if (words.length === 0) return;
+      speakText(words[currentIndex].target);
+    }
+
+    function speakText(text) {
+      if (!('speechSynthesis' in window)) return alert("Din webbläsare stöder inte uppläsning.");
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = currentLang;
+      utterance.rate = 0.9; // Lite lugnare tempo för tydlighet
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // --- STAVNINGSKONTROLL ---
+    function insertChar(char) {
+      const input = document.getElementById('spellInput');
+      input.value += char;
+      input.focus();
+    }
+
+    function normalizeStr(str) {
+      return str.toLowerCase().trim().replace(/[¡!¿?.,]/g, '');
+    }
+
+    function removeAccents(str) {
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function checkSpelling() {
+      const input = document.getElementById('spellInput').value;
+      const correct = words[currentIndex].target;
+      const fb = document.getElementById('spellFeedback');
+      fb.classList.remove('hidden');
+
+      if (normalizeStr(input) === normalizeStr(correct)) {
+        streak++;
+        fb.className = "p-3 rounded-xl text-sm font-bold mb-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300";
+        fb.innerHTML = `✅ Rätt! Snyggt jobbat!`;
+        speakCurrentWord();
+      } else if (removeAccents(normalizeStr(input)) === removeAccents(normalizeStr(correct))) {
+        streak++;
+        fb.className = "p-3 rounded-xl text-sm font-bold mb-3 bg-amber-500/20 border border-amber-500/40 text-amber-300";
+        fb.innerHTML = `🤏 Nästan! Glöm inte accenten: <span class="underline">${correct}</span>`;
+        speakCurrentWord();
+      } else {
+        streak = 0;
+        fb.className = "p-3 rounded-xl text-sm font-bold mb-3 bg-rose-500/20 border border-rose-500/40 text-rose-300";
+        fb.innerHTML = `❌ Inte riktigt. Rätt svar är: <span class="underline">${correct}</span>`;
+      }
+      document.getElementById('streakCount').innerText = streak;
+    }
+
+    // --- UTTALSKONTROLL (SPEECH-TO-TEXT) ---
+    function startSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        return alert("Taligenkänning stöds tyvärr inte i denna webbläsare. Testa Safari eller Chrome!");
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = currentLang;
+      recognition.interimResults = false;
+
+      const micBtn = document.getElementById('micButton');
+      const micStatus = document.getElementById('micStatus');
+      const fb = document.getElementById('speakFeedback');
+
+      recognition.onstart = () => {
+        micBtn.classList.add('animate-pulse', 'bg-rose-600');
+        micStatus.innerText = "Lyssnar... Säg ordet nu!";
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const target = words[currentIndex].target;
+        fb.classList.remove('hidden');
+
+        // Jämför utan artiklar (el/la/the) om man bara säger själva huvudordet
+        const cleanTranscript = removeAccents(normalizeStr(transcript));
+        const cleanTarget = removeAccents(normalizeStr(target));
+        const targetWithoutArticle = cleanTarget.replace(/^(el |la |los |las |un |una |the |a |an )/, '');
+
+        if (cleanTranscript === cleanTarget || cleanTranscript === targetWithoutArticle) {
+          streak++;
+          fb.className = "p-3 rounded-xl text-sm font-bold mt-4 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300";
+          fb.innerHTML = `🎉 Klockrent uttal! Jag hörde: "${transcript}"`;
+        } else {
+          fb.className = "p-3 rounded-xl text-sm font-bold mt-4 bg-amber-500/20 border border-amber-500/40 text-amber-300";
+          fb.innerHTML = `🎧 Jag hörde "${transcript}". Försök igen!`;
+        }
+        document.getElementById('streakCount').innerText = streak;
+      };
+
+      recognition.onerror = () => {
+        micStatus.innerText = "Kunde inte höra, försök igen!";
+      };
+
+      recognition.onend = () => {
+        micBtn.classList.remove('animate-pulse', 'bg-rose-600');
+        micStatus.innerText = "Tryck på mikrofonen och säg ordet";
+      };
+
+      recognition.start();
+    }
+
+    // --- KAMERA & AI-TOLKNING (GEMINI 2.5 FLASH) ---
+    async function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const apiKey = localStorage.getItem('melker_gemini_key');
+      if (!apiKey) {
+        toggleSettings();
+        return alert("Du behöver klistra in din Gemini API-nyckel under kugghjulet uppe till höger först!");
+      }
+
+      const loader = document.getElementById('loadingIndicator');
+      loader.classList.remove('hidden');
+
+      try {
+        const base64Image = await compressImage(file);
+        const langName = currentLang === 'es-ES' ? 'spanska' : 'engelska';
+
+        const prompt = `Du är en hjälpsam språklärare. Läs av alla glosor på bilden. 
+Returnera ENDAST en giltig JSON-array med objekt i detta exakta format:
+[{"sv": "svenskt ord", "target": "ordet på ${langName}", "example": "En kort enkel exempelmening på ${langName}"}]
+Ingen markdown, inga förklaringar, bara rå JSON.`;
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+              ]
+            }],
+            generationConfig: { responseMimeType: "application/json" }
+          })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+
+        const rawText = data.candidates[0].content.parts[0].text;
+        const parsedWords = JSON.parse(rawText);
+
+        if (Array.isArray(parsedWords) && parsedWords.length > 0) {
+          words = parsedWords;
+          localStorage.setItem('melker_words', JSON.stringify(words));
+          currentIndex = 0;
+          isFlipped = false;
+          updateUI();
+          alert(`Hittade och läste in ${words.length} glosor! Nu kör vi!`);
+        } else {
+          alert("Hittade inga tydliga glosor på bilden. Försök ta ett nytt kort lite närmare!");
+        }
+      } catch (err) {
+        alert("Något gick fel vid inläsningen: " + err.message);
+      } finally {
+        loader.classList.add('hidden');
+        event.target.value = '';
+      }
+    }
+
+    // Skalar ner mobilkamera-bilder så det går snabbt att skicka till AI:n
+    function compressImage(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1200;
+            const scale = MAX_WIDTH / img.width;
+            canvas.width = scale < 1 ? MAX_WIDTH : img.width;
+            canvas.height = scale < 1 ? img.height * scale : img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            resolve(dataUrl.split(',')[1]);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function resetDemoWords() {
+      words = demoWordsEs;
+      localStorage.removeItem('melker_words');
+      currentIndex = 0;
+      updateUI();
+    }
+  </script>
+</body>
+</html>
